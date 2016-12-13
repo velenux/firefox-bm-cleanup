@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-# System
+# for command line argument access
 import sys
 
 # DEBUG
@@ -15,18 +15,12 @@ from requests.adapters import HTTPAdapter
 # beautiful soup for html parsing
 from bs4 import BeautifulSoup
 
-# sha256sum
-import hashlib
-
 # logging - https://docs.python.org/2/howto/logging.html#logging-basic-tutorial
 import logging
 logging.basicConfig(filename='ff-bm-cleanup.log', level=logging.DEBUG, format='%(asctime)s [%(name)s] |%(levelname)s| %(message)s')
 
 # JSON - http://stackoverflow.com/questions/2835559/parsing-values-from-a-json-file-in-python#2835672
 import json
-
-# time conversion
-import time
 
 # regexp
 import re
@@ -95,16 +89,19 @@ def normalize_tags(bm_tags, page_tags):
 	return ','.join(tags)
 
 
+def remove_entry(container, entry):
+	"""Try to remove an entry from a container."""
+	logging.debug('[x] ID: %s removing entry', entry['id'])
+	try:
+		container['children'].remove(entry)
+	except Exception as e:
+		logging.warn('Error removing entry: %s', e)
+
+
 def iterate_bookmarks(path, container):
 	"""Iterate over the bookmark tree."""
 	# report where I am
 	logging.debug('>>> ID: %s iterate_bookmarks(%s, %s [...])', container['id'], path, str(container)[0:30])
-	# short-circuit if the current container is empty
-	# FIXME: should be moved to the container section in the iteration
-	# so we can remove empty containers
-	if len(container) == 0 or not 'children' in container:
-		logging.debug('[ ] ID: %s container is empty', container['id'])
-		return
 	# iterate over the childrens
 	# http://stackoverflow.com/questions/18418/elegant-way-to-remove-items-from-sequence-in-python
 	logging.debug('[ ] ID: %s, %s items to process', container['id'], len(container['children']))
@@ -119,6 +116,11 @@ def iterate_bookmarks(path, container):
 			entry['tags'] = ''
 		# if it is a container, recurse
 		if entry['type'] == 'text/x-moz-place-container':
+			# short-circuit if the container is empty
+			if not 'children' in entry or len(entry['children']) == 0:
+				logging.debug('[ ] ID: %s container is empty', entry['id'])
+				remove_entry(container, entry)
+				return
 			logging.debug('[ ] ID: %s is a container', entry['id'])
 			path.append(name) # add the name to the path stack
 			iterate_bookmarks(path, entry) # iterate over the entry
@@ -136,10 +138,7 @@ def iterate_bookmarks(path, container):
 			# FIXME: using global variables is ugly
 			if entry['uri'] in URIS:
 				logging.debug('[x] ID: %s has a duplicate URI, removing', entry['id'])
-				try:
-					container['children'].remove(entry)
-				except Exception as e:
-					logging.warn('Error removing entry: %s', e)
+				remove_entry(container, entry)
 				continue
 			# if the uri is not in the list, add it
 			# FIXME: using global variables is ugly
@@ -161,12 +160,7 @@ def iterate_bookmarks(path, container):
 					status = False
 			if status == False:
 				logging.warn('[x] ID: %s status FAIL, removing', entry['id'])
-				try:
-					container['children'].remove(entry)
-					continue
-				except Exception as e:
-					logging.warn('Error removing entry: %s', e)
-					continue
+				remove_entry(container, entry)
 			# normalize tags
 			entry['tags'] = normalize_tags(entry['tags'], page_metadata['keywords'])
 			# report
