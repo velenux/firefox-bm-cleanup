@@ -92,7 +92,7 @@ def normalize_tags(bm_tags, page_tags):
 def remove_entry(container, entry):
 	"""Try to remove an entry from a container."""
 	# http://stackoverflow.com/questions/18418/elegant-way-to-remove-items-from-sequence-in-python
-	logging.debug('[x] ID: %s removing entry', entry['id'])
+	logging.info('_x_ ID: %s removing entry', entry['id'])
 	try:
 		container['children'].remove(entry)
 	except Exception as e:
@@ -132,7 +132,7 @@ def entry_handle_bookmark(container, entry, path, name):
 	# short-circuit check if the uri is duplicate
 	# FIXME: using global variables is ugly
 	if entry['uri'] in URIS:
-		logging.debug('[x] ID: %s has a duplicate URI, removing', entry['id'])
+		logging.debug('-x- ID: %s has a duplicate URI, removing', entry['id'])
 		remove_entry(container, entry)
 		return
 	# if the uri is not in the list, add it
@@ -147,13 +147,18 @@ def entry_handle_bookmark(container, entry, path, name):
 					# update the uri if it has been changed (redirects, etc)
 					logging.warn('-m- ID: %s url changed old(%s) new(%s)', entry['id'], entry['uri'], req.url)
 					entry['uri'] = req.url
+					# FIXME: using global variables is ugly
+					if entry['uri'] in URIS:
+						logging.debug('-x- ID: %s has a duplicate URI, removing', entry['id'])
+						remove_entry(container, entry)
+						return
 				page_metadata = get_page_metadata(req.text)
 			else:
-				logging.error('-x- ID: %s bad return code for %s', entry['id'], entry['url'])
+				logging.error('-x- ID: %s bad return code for %s', entry['id'], entry['uri'])
 				remove_entry(container, entry)
 				return
 		except Exception as e:
-			logging.error('-x- ID: %s exception while fetching (%s): %s', entry['id'], entry['url'], e)
+			logging.error('-x- ID: %s exception while fetching (%s): %s', entry['id'], entry['uri'], e)
 			remove_entry(container, entry)
 			return
 	# normalize tags
@@ -173,7 +178,7 @@ def iterate_bookmarks(path, container):
 	logging.debug('>>> ID: %s iterate_bookmarks(%s, %s [...])', container['id'], path, str(container)[0:30])
 	for entry in reversed(container['children']):
 		name = entry_find_name(entry)
-		logging.debug('--> ID: %s %s/%s', entry['id'], path, name)
+		logging.debug('--> ID: %s %s/%s', entry['id'], '/'.join(path), name)
 		if entry['type'] == 'text/x-moz-place-container':
 			entry_handle_container(container, entry, path, name)
 		if entry['type'] == 'text/x-moz-place':
